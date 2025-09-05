@@ -1,10 +1,9 @@
 
-import polars as pl
+# import polars as pl
 
-import pathlib
-import io
-import os
-
+# import pathlib
+# import io
+# import os
 
 
 class ThatchRoot:
@@ -20,11 +19,12 @@ class ThatchRoot:
     def save_run(self, run):
         raise NotImplementedError()
 
-    def get_run(self, uuid:str, meta=None):
+    # def get_run(self, uuid:str, meta=None):
+    def get_run(self, uuid:str):
         raise NotImplementedError()
 
-    def get_meta(self):
-        raise NotImplementedError()
+    # def get_meta(self):
+    #     raise NotImplementedError()
 
 
 

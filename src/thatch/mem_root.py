@@ -1,6 +1,8 @@
 
-import polars as pl
+# import polars as pl
 
+import pickle
+import zlib
 from functools import wraps
 
 from .run import ThatchRun
@@ -30,15 +32,19 @@ class MemoryRoot(ThatchRoot):
         meta_entry = run.meta_entry()
         self.meta[uuid] = meta_entry
 
-        run_df = pl.DataFrame(run.rows)
+        self.runs[uuid] = zlib.compress(pickle.dumps(run.rows))
+        # run_df = pl.DataFrame(run.rows)
         #TODO: compress it, but which mode is better?
-        self.runs[uuid] = run_df.write_ipc(None)
+        # self.runs[uuid] = run_df.write_ipc(None)
+        # self.runs[uuid] = run_df.write_ipc(None)
 
     def get_run(self, uuid):
-        return pl.read_ipc(self.runs[uuid])
+        # return pl.read_ipc(self.runs[uuid])
+        return pickle.loads(zlib.decompress(self.runs[uuid]))
 
-    def get_meta(self):
-        return pl.DataFrame(list(self.meta.values()))
+    # def get_meta
+    # def get_meta(self):
+    #     return pl.DataFrame(list(self.meta.values()))
 
 
 MEMORY_ROOT = MemoryRoot()
