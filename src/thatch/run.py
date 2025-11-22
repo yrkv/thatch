@@ -3,6 +3,7 @@ from PIL import Image
 import numpy
 # import polars as pl
 import psutil
+import torch
 
 #import sqlite3
 import hashlib
@@ -20,6 +21,20 @@ import functools
 
 
 class ThatchRun:
+    """A run is just a collection of data structures designed for tracking
+    information about a single machine learning training run context.
+    
+    Each run consists of the following components:
+    - `rows`: `list[dict]`
+        - Step-level tracking information.
+    - `config`: dict[str, Any]
+        - Run-level user-configurable settings.
+        - Changed with `run["key"]=value` or `run.config={'key':value,...}`.
+        - When written to a root, merges in attributes with an underscore.
+            - _uuid, _experiment, _tags, _start_time, _end_time, etc.
+            - These *can* be overwritten with config, but do so carefully.
+    """
+
     def __init__(self,
                  root,
                  experiment:str = '',
@@ -32,54 +47,39 @@ class ThatchRun:
             self.process = psutil.Process()
         except Exception:
             self.process = None
-        # last value of each tracked key/value, even if the latest row doesn't include them.
+        # Last value of each tracked key/value, even if the latest row doesn't
+        # include them. Used for updating tqdm bar postfix.
         # key -> (step, value)
         self.merged_latest = {}
-        
 
-        self.meta_info = {}
-        # the following properties are merged into `meta_info` when creating the run's entry
+        self.config = {}
+        # following properties are merged into `config` when writing
         self.experiment = experiment
         self.tags = tags
         self.uuid = uuid.uuid4()
         self.start_time = datetime.datetime.now()
-
+        #end_time is computed as time of write
 
     def __setitem__(self, key:str, value):
         assert isinstance(key, str)
-        # if isinstance(value, dict):
-        #     for k, v in value.items():
-        #         assert isinstance(k, str)
-        #         self.__setitem__(f'{key}.{k}', v)
-        # else:
-        self.meta_info[key] = value
+        self.config[key] = value
 
     def __getitem__(self, key:str):
         assert isinstance(key, str)
-        # assert len(key) > 0
-        if key in self.meta_info:
-            return self.meta_info[key]
-        else:
-            assert False, 'todo'
-        # subkeys = key.split('.')
-        # value = self.meta_info[key]
-        # if isinstance(value, dict):
-        #     for k, v in value.items():
-        #         assert isinstance(k, str)
-        #         self.__setitem__(f'{key}.{k}', v)
-        # else:
-        #     self.meta_info[key] = value
-
+        if key in self.config:
+            return self.config[key]
 
     def track_system_info(self,
                           keys=(
                           '_datetime', '_mem%', '_p_mem%', '_cpu%', '_disk%', 
-                          #TODO: 'gpu%', 'gpu_temp', network usage, battery, etc.
+                          #TODO: gpu%, gpu_temp, network usage, battery, etc.
                           ),
-                          step:int=None):
+                          **kwargs):
+                          #step:int=None):
         """Track a collection of built-in system information.
 
-        Equivalent to calling `track` for each system trackable with the relevant value.
+        Equivalent to calling `track` for each system trackable in `keys` with
+        the relevant value.
         """
 
         kv = {}
@@ -94,7 +94,33 @@ class ThatchRun:
             kv['_cpu%'] = self.process.cpu_percent()
         if '_disk%' in keys:
             kv['_disk%'] = psutil.disk_usage('/').percent
-        self.track(kv, step=step)
+        self.track(kv, **kwargs)
+
+
+    def track_torch_module_gradients(self,
+                                     module:torch.nn.Module,
+                                     prefix:str='_grad:',
+                                     **kwargs):
+        """Track gradient norm of each (named) parameter of a torch module.
+
+        Prepends a prefix which defaults to '_grad:' for clarity. This can be
+        removed with prefix='' or otherwise customized. If tracking multiple
+        modules, consider organizing the modules in a `torch.nn.ModuleDict` to
+        give each a name.
+        ```
+        run.track_torch_module_gradients(torch.nn.ModuleDict({
+            'G': generator, 'D': discriminator
+        })
+        ```
+        """
+        kv = {}
+        for name, param in module.named_parameters():
+            if param.grad is None:
+                kv[prefix+name] = None
+                continue
+
+            kv[prefix+name] = torch.nn.utils.get_total_norm(param.grad).item()
+        self.track(kv, **kwargs)
 
 
     def track(self, kv:dict, step:int=None):
@@ -109,6 +135,8 @@ class ThatchRun:
 
         # populate rows up until step (inclusive)
         while len(self.rows) <= step:
+            # This really shouldn't happen. Empty rows means the user made a
+            # mistake in 99% of cases. Maybe emit warning?
             self.rows.append(dict())
 
         row = self.rows[step]
@@ -125,8 +153,11 @@ class ThatchRun:
                 self.merged_latest[key] = step, out
 
 
-    def annotate_tqdm(self, bar, patterns:str|list[str]='[!_]*',
+    def annotate_tqdm(self, bar, patterns:str|list[str]='[!_.]*',
                       ignore_case=False):
+        """Wrapper around `tqdm.set_postfix` that automatically grabs the
+        latest tracking information for keys which match an `fnmatch` pattern.
+        """
         if isinstance(patterns, str):
             patterns = [patterns]
 
@@ -140,25 +171,32 @@ class ThatchRun:
         bar.set_postfix(postfix)
 
     
-    def meta_entry(self):
+    def full_config(self):
+        """Get `self.config` with run attributes merged in.
+        """
         end_time = datetime.datetime.now()
         entry = {
             '_uuid': self.uuid.hex,
             '_experiment': self.experiment,
-            # '_interval': (self.start_time, end_time),
-            '_start_time': self.start_time,
-            '_end_time': end_time,
-            '_tags': ','.join(self.tags),
-            # '_import': '', # reserve "import" column -- gets set when loaded
+            #'_tags': ','.join(self.tags),
+            '_tags': self.tags,
+            '_start_time': self.start_time.timestamp(),
+            '_end_time': end_time.timestamp(),
         }
 
-        assert len(entry.keys() & self.meta_info.keys()) == 0
-        entry.update(self.meta_info)
-
+        # For now we won't allow any overlap.
+        # TODO: consider allowing overriding attribute entires through config
+        assert len(entry.keys() & self.config.keys()) == 0
+        entry.update(self.config)
         return entry
 
-    def write(self):
-        self.root.save_run(self)
+
+    def write(self, root=None):
+        if root is None:
+            self.root.save_run(self)
+        else:
+            root.save_run(self)
+
 
 
 
@@ -168,7 +206,7 @@ def convert(value, run:ThatchRun=None):
     #raise TypeError(f'invalid value type for tracking: {type(value)}')
 
 @convert.register
-def _(value: Union[str, int, float, datetime.datetime], run:ThatchRun=None):
+def _(value: Union[None, str, int, float, datetime.datetime], run:ThatchRun=None):
     return value
 
 @convert.register
