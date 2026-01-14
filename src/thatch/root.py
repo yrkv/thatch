@@ -28,7 +28,7 @@ class ThatchRoot:
     def filter(self, *args, **kwargs) -> "ThatchRoot":
         return FilterSubRoot(self, *args, **kwargs)
 
-    def aggregate(self, key:str, aggr:str='mean') -> list[float]:
+    def aggregate(self, key:str, aggr:str) -> list[float | tuple | list[float]]:
         """
         Combine a key's values across all the runs in this root.
 
@@ -41,8 +41,9 @@ class ThatchRoot:
                   (or `None` if empty). Otherwise, that's used
                   as a default.
         - implement aggregations
-            - median, mode, min, max
-            - tuple output: quantiles, confidence interval, 
+            - float: median, mode, min, max
+            - tuple: quantiles, 95% confidence interval
+            - list[float]: list
         """
 
         first_run = next(iter(self.get_runs()))
@@ -60,8 +61,6 @@ class ThatchRoot:
             out[i] /= run_count
 
         return out
-
-
 
     def group_by(
         self,

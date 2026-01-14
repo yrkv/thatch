@@ -36,7 +36,7 @@ class DotDict(dict):
         self.update(state)
 
 
-def dot_split_index(d:dict, keys_str:str):
+def dot_split_index(d:dict, keys_str:str, default=None):
     """
     Index into a dict with a slightly
     extended format:
@@ -50,14 +50,25 @@ def dot_split_index(d:dict, keys_str:str):
     keys = keys_str.split('.')
     for sub_key in keys:
         if sub_key not in d:
-            raise KeyError(
-                f'No key "{sub_key}" in keys {d.keys()} when resolving "{keys_str}"'
-            )
+            return default
+            #raise KeyError(
+            #    f'No key "{sub_key}" in keys {d.keys()} when resolving "{keys_str}"'
+            #)
         d = d[sub_key]
     return d
 
 
-def resolve_module(config:str|dict[str,dict], search_globals=False) -> torch.nn.Module:
+def resolve_module(
+    config: (
+        str
+        | dict[str,dict]
+        | torch.nn.Module
+    ),
+    search_globals=False
+) -> torch.nn.Module:
+    if isinstance(config, torch.nn.Module):
+        return config
+
     if isinstance(config, str):
         name, kw_args, star_args = config, {}, []
     else:
@@ -78,5 +89,26 @@ def resolve_module(config:str|dict[str,dict], search_globals=False) -> torch.nn.
 
     assert False, "TODO: handle invalid input"
 
+
+def pretty_config(config):
+    match config:
+        case dict():
+            if len(config) == 1:
+                name, = config.keys()
+                if isinstance(config[name], dict):
+                    kw_args = config[name].copy()
+                    star_args = kw_args.pop('*args', [])
+                    args = [
+                        *(f'{pretty_config(arg)}' for arg in star_args),
+                        *(f'{key}={pretty_config(val)}' for key,val in kw_args.items()),
+                    ]
+                    if len(args) == 0:
+                        return name
+                    return f'{name}({",".join(args)})'
+            return str({key: pretty_config(val) for key,val in config.items()})
+        case list(): # list case should only happen in recursive sub-calls
+            return str([pretty_config(c) for c in config])
+
+    return config
 
 

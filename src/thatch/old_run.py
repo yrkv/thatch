@@ -6,7 +6,6 @@ import psutil
 import torch
 
 #import sqlite3
-import copy
 import hashlib
 import datetime
 import io
@@ -19,9 +18,6 @@ import fnmatch
 from numbers import Number
 from typing import Union
 import functools
-
-#from .config.configurable import GLOBAL_CONFIG
-from .global_config import GLOBAL_CONFIG
 
 
 class ThatchRun:
@@ -56,9 +52,7 @@ class ThatchRun:
         # key -> (step, value)
         self.merged_latest = {}
 
-        self.config = copy.deepcopy(GLOBAL_CONFIG)
-        #self.config = {}
-
+        self.config = {}
         # following properties are merged into `config` when writing
         self.experiment = experiment
         self.tags = tags
@@ -66,8 +60,14 @@ class ThatchRun:
         self.start_time = datetime.datetime.now()
         #end_time is computed as time of write
 
-    def copy_config(self):
-        self.config = copy.deepcopy(GLOBAL_CONFIG)
+    def __setitem__(self, key:str, value):
+        assert isinstance(key, str)
+        self.config[key] = value
+
+    def __getitem__(self, key:str):
+        assert isinstance(key, str)
+        if key in self.config:
+            return self.config[key]
 
     def track_system_info(self,
                           keys=(
