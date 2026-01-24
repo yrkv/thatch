@@ -3,10 +3,15 @@ from collections import namedtuple
 from functools import wraps
 
 from collections.abc import Callable, Hashable, Iterable
-from typing import Any
+from typing import Any, NamedTuple
 
 from .run import ThatchRun
 
+
+class MultiRunData(NamedTuple):
+    logs: Iterable[list]
+    configs: Iterable[dict]
+    infos: Iterable[dict]
 
 
 class ThatchRoot:
@@ -16,13 +21,7 @@ class ThatchRoot:
     def save_run(self, run: ThatchRun):
         raise NotImplementedError()
 
-    def get_uuids(self, uuids: Iterable[str]|None = None) -> Iterable[str]:
-        raise NotImplementedError()
-
-    def get_runs(self, uuids: Iterable[str]|None = None):
-        raise NotImplementedError()
-    
-    def get_configs(self, uuids: Iterable[str]|None = None):
+    def get(self, uuids: Iterable[str]|None = None) -> MultiRunData:
         raise NotImplementedError()
 
     def filter(self, *args, **kwargs) -> "ThatchRoot":
@@ -146,6 +145,7 @@ class FilterSubRoot(ThatchRoot):
             Any,
         ),
     ):
+        #TODO: also allow filter by info, like if it has a certain tag.
         #TODO: implement a nice way to query for nested config params,
         #   thatch.Param("train.conv_block.dropout") > 0.4
         # or (looks worse but is unambiguous)
@@ -159,7 +159,7 @@ class FilterSubRoot(ThatchRoot):
         for k, v in constraints.items():
             match v:
                 # note: we do the k=k,v=v stuff because python lambdas and scopes
-                # are a bit weird; without it, only the last constraint applies.
+                # are a bit weird; without it, only the final constraint applies.
                 case Callable():
                     self.predicates.append(lambda c,k=k,v=v: (v(c.get(k))))
                 case None:

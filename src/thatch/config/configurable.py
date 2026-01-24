@@ -4,7 +4,7 @@ from collections.abc import Iterable
 import functools
 import inspect
 
-from .util import DotDict, dot_split_index, resolve_module
+from .util import DotDict, dot_split_index
 from ..global_config import GLOBAL_CONFIG
 
 

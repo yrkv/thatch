@@ -13,7 +13,7 @@ from typing import Any
 
 
 from .run import ThatchRun
-from .root import ThatchRoot
+from .root import ThatchRoot, MultiRunData
 
 
 
@@ -25,7 +25,7 @@ class DirRoot(ThatchRoot):
         root.sqlite
         runs/
             7ca873a1-9673-4d1d-89d2-82a8b5b52a7a/
-                rows.sqlite
+                log.sqlite
                 config.json
             ...
     ```
@@ -49,7 +49,7 @@ class DirRoot(ThatchRoot):
         cur.execute('''
             CREATE TABLE IF NOT EXISTS root(
                 id INTEGER PRIMARY KEY,
-                uuid TEXT NOT NULL,
+                uuid TEXT NOT NULL UNIQUE,
                 experiment TEXT NOT NULL,
                 tags TEXT NOT NULL,
                 start_time TEXT NOT NULL,
@@ -61,60 +61,42 @@ class DirRoot(ThatchRoot):
 
     def save_run(self, run):
         #TODO: create <root>/<uuid> folder
-        #TODO: write <root>/<uuid>/rows.pickle.zlib
+        #TODO: write <root>/<uuid>/log.pickle.zlib
         #TODO: write <root>/<uuid>/config.json
+        #TODO: write <root>/<uuid>/info.json
         #TODO: append to <root>/root.sqlite
 
-        uuid = str(run.uuid)
+        uuid = run.info['uuid']
+
         os.makedirs(self.path / uuid, exist_ok=True)
-
-        with open(self.path / uuid / 'rows.pickle.zlib', 'wb') as f:
-            f.write(zlib.compress(pickle.dumps(run.rows)))
-
+        with open(self.path / uuid / 'log.pickle.zlib', 'wb') as f:
+            f.write(zlib.compress(pickle.dumps(run.log)))
         with open(self.path / uuid / 'config.json', 'w') as f:
             json.dump(run.config, f)
+        with open(self.path / uuid / 'info.json', 'w') as f:
+            json.dump(run.info, f)
 
         cur = self.con.cursor()
         cur.execute('''
-                    INSERT INTO root
+                    INSERT OR REPLACE INTO root
                         (uuid, experiment, tags, start_time, end_time)
                     VALUES
                         (?, ?, ?, ?, ?);
                     ''',
                     (
-                        uuid,
-                        run.experiment,
-                        ','.join(run.tags),
-                        run.start_time,
-                        datetime.datetime.now(),
+                        run.info['uuid'],
+                        run.info['experiment'],
+                        run.info['tags'],
+                        run.info['start_time'],
+                        run.info['end_time'],
                     )
         )
-
-
         self.con.commit()
 
-
-    def get_uuids(self, uuids: Iterable[str]|None = None) -> Iterable[str]:
-        #TODO: read the root.sqlite file for this
-        pass
-        #match uuids:
-        #    case None:
-        #        return list(self.configs.keys())
-        #    case Iterable():
-        #        return filter(lambda u: u in self.configs, uuids)
-        #assert False, "invalid input"
-
-    def get_runs(self, uuids: Iterable[str]|None = None) -> Iterable[list[dict]]:
+    def get(self, uuids: Iterable[str]|None = None) -> MultiRunData:
         pass
         #return (
         #    pickle.loads(zlib.decompress(self.runs[uuid]))
-        #    for uuid in self.get_uuids(uuids)
-        #)
-
-    def get_configs(self, uuids: Iterable[str]|None = None) -> Iterable[dict[str, Any]]:
-        pass
-        #return (
-        #    json.loads(self.configs[uuid])
         #    for uuid in self.get_uuids(uuids)
         #)
 
