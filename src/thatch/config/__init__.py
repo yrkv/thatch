@@ -1,7 +1,12 @@
-
 from .configurable import configurable
-#from .configurable import GLOBAL_CONFIG, configurable
+from .configure import configure, configure_from_args
+from .globals import GLOBAL_CONFIG
+from .util import expand_dots
 
-from .configure import configure_from_args, configure
-
-from .util import dot_split_index, resolve_module, pretty_config
+__all__ = [
+    'configurable',
+    'configure',
+    'configure_from_args',
+    'GLOBAL_CONFIG',
+    'expand_dots',
+]

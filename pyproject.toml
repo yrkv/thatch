@@ -15,6 +15,7 @@ dependencies = [
     # "opencv-python>=4.11.0.86",
     # "polars>=1.31.0",
     "matplotlib>=3.10.3",
+    "pyyaml>=6.0.2",
 ]
 
 [build-system]
@@ -23,5 +24,25 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pytest>=9.0.2",
     "jupyter>=1.1.1",
 ]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.format]
+quote-style = "single"
+docstring-code-format = false
+
+[tool.pyright]
+typeCheckingMode = "basic"
+#reportCallIssue = false
+#reportExplicitAny = false
+#reportAny = false
+
+[[tool.pyright.executionEnvironments]]
+root = "tests"
+reportCallIssue = "none"
+reportAttributeAccessIssue = "none"
+

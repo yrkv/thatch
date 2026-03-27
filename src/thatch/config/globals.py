@@ -1,3 +1,4 @@
+from typing import Any
 
 """
 Global variable containing the most recently loaded configuration.
@@ -9,5 +10,4 @@ context manager or variants like `configure_from_args`.
 A "default" config can be achieved by chaining a `configure` with default
 values into the modified values.
 """
-GLOBAL_CONFIG = dict()
-
+GLOBAL_CONFIG: dict[str, Any] = dict()
